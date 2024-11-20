@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+# Verificar argumentos e solicitar diretório, se necessário
+if [ $# -eq 0 ]; then
+  read -p "Por favor, insira o caminho do diretório a processar: " DIR
+else
+  DIR=$1
+fi
+
+# Verificar se o diretório existe
+if [ ! -d "$DIR" ]; then
+  echo "Diretório não encontrado."
+  exit 1
+fi
+
+# Ajustar formato de data para nomes válidos
+DATA=$(date +"%Y-%m-%d")
+BACKUP_DIR="$DIR/backup_$DATA"
+mkdir -p "$BACKUP_DIR/pequeno" "$BACKUP_DIR/medio" "$BACKUP_DIR/grande"
+
+# Processar ficheiros no diretório
+SMALL=0
+MEDIUM=0
+LARGE=0
+TOTAL_FILES=0
+TOTAL_SIZE=0
+LARGEST_FILE=""
+LARGEST_SIZE=0
+
+for FILE in "$DIR"/*; do
+  if [ -f "$FILE" ]; then
+    WORD_COUNT=$(wc -w < "$FILE")
+    FILE_SIZE=$(stat --printf="%s" "$FILE")
+
+    # Contabilizar arquivos movidos
+    TOTAL_FILES=$((TOTAL_FILES + 1))
+    TOTAL_SIZE=$((TOTAL_SIZE + FILE_SIZE))
+
+    # Identificar maior ficheiro
+    if [ $FILE_SIZE -gt $LARGEST_SIZE ]; then
+      LARGEST_SIZE=$FILE_SIZE
+      LARGEST_FILE=$(basename "$FILE")
+    fi
+
+    # Classificar ficheiro com base no tamanho
+    if [ $WORD_COUNT -le 1000 ]; then
+      mv "$FILE" "$BACKUP_DIR/pequeno/"
+      SMALL=$((SMALL + 1))
+    elif [ $WORD_COUNT -le 10000 ]; then
+      mv "$FILE" "$BACKUP_DIR/medio/"
+      MEDIUM=$((MEDIUM + 1))
+    else
+      mv "$FILE" "$BACKUP_DIR/grande/"
+      LARGE=$((LARGE + 1))
+    fi
+  fi
+done
+
+# Calcular a média do tamanho dos arquivos movidos, se houver arquivos
+if [ $TOTAL_FILES -gt 0 ]; then
+  AVERAGE_SIZE=$((TOTAL_SIZE / TOTAL_FILES))
+else
+  AVERAGE_SIZE=0
+fi
+
+# Obter previsão do tempo
+WEATHER=$(curl -s "https://wttr.in/?format=3")
+
+# Gerar relatório
+REPORT="$BACKUP_DIR/relatorio_$DATA.txt"
+{
+  echo "Relatório de Processamento - $DATA"
+  echo "----------------------------------"
+  echo "Número total de ficheiros: $((SMALL + MEDIUM + LARGE))"
+  echo "----------------------------------"
+  echo "Ficheiros pequenos (<= 1000 palavras): $SMALL"
+  echo "----------------------------------"
+  echo "Ficheiros médios (1000 - 10000 palavras): $MEDIUM"
+  echo "----------------------------------"
+  echo "Ficheiros grandes (> 10000 palavras): $LARGE"
+  echo "----------------------------------"
+  echo "Nome do maior ficheiro: $LARGEST_FILE"
+  echo "----------------------------------"
+  echo "Tamanho do maior ficheiro: $LARGEST_SIZE bytes"
+  echo "----------------------------------"
+  echo "Média do tamanho dos ficheiros processados: $AVERAGE_SIZE bytes"
+  echo "----------------------------------"
+  echo "Previsão do tempo: $WEATHER"
+  echo "----------------------------------"
+} > "$REPORT"
+
+# Exibir relatório
+cat "$REPORT"
+echo "Relatório salvo em: $REPORT"
